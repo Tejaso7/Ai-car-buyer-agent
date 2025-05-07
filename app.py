@@ -1,13 +1,18 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import io
-import os
 
-# Set your Google API Key
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Streamlit page config
+st.set_page_config(page_title="Gemini Vehicle Buyer Bot", page_icon="🚘")
+st.title("🚘 Gemini Vehicle Buyer Assistant with Chatbot")
 
-# Prompt for Gemini analysis
+st.sidebar.header("💬 Chat with Vehicle Advisor")
+st.sidebar.markdown("Ask follow-up questions after analysis!")
+
+# API Key Input (from user)
+api_key = st.text_input("🔑 Enter your Google API Key:", type="password")
+
+# Prompt for Gemini Vision analysis
 VEHICLE_ANALYSIS_PROMPT = """
 You're a smart vehicle buyer and automotive analyst.
 
@@ -27,61 +32,60 @@ Given the image of a vehicle (car, bike, etc.), provide a buyer-style report. St
 Be analytical but easy to understand. Use bullet points or tables if needed.
 """
 
-st.set_page_config(page_title="Gemini Vehicle Buyer Bot", page_icon="🚘")
-st.title("🚘 Gemini Vehicle Buyer Assistant with Chatbot")
-
-st.sidebar.header("💬 Chat with Vehicle Advisor")
-st.sidebar.markdown("Ask follow-up questions after analysis!")
-
-# Initialize session state for chatbot history
+# Initialize session state
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Image uploader
-uploaded_image = st.file_uploader("Upload a car or bike image", type=["jpg", "jpeg", "png"])
+# File uploader
+uploaded_image = st.file_uploader("📤 Upload a car or bike image", type=["jpg", "jpeg", "png"])
 
-if uploaded_image:
-    image = Image.open(uploaded_image)
-    st.image(image, caption="📷 Uploaded Vehicle", use_column_width=True)
+# Proceed only if API key is provided
+if api_key:
+    try:
+        genai.configure(api_key=api_key)
 
-    if st.button("🔍 Analyze Vehicle"):
-        st.write("Analyzing with Gemini Vision... Please wait.")
-        model = genai.GenerativeModel("gemini-pro-vision")
-        response = model.generate_content(
-            [VEHICLE_ANALYSIS_PROMPT, image],
-            stream=False
-        )
-        report = response.text
-        st.markdown("### ✅ Vehicle Buyer Report")
-        st.markdown(report)
+        if uploaded_image:
+            image = Image.open(uploaded_image)
+            st.image(image, caption="📷 Uploaded Vehicle", use_column_width=True)
 
-        # Store in session state for chatbot
-        st.session_state.vehicle_report = report
-        st.session_state.chat_history.append({"role": "assistant", "text": report})
+            if st.button("🔍 Analyze Vehicle"):
+                st.write("Analyzing with Gemini Vision... Please wait.")
+                model = genai.GenerativeModel("gemini-pro-vision")
+                response = model.generate_content(
+                    [VEHICLE_ANALYSIS_PROMPT, image],
+                    stream=False
+                )
+                report = response.text
+                st.markdown("### ✅ Vehicle Buyer Report")
+                st.markdown(report)
 
-# Chatbot
-if "vehicle_report" in st.session_state:
-    user_input = st.sidebar.text_input("💬 Your question to the buyer bot:")
+                st.session_state.vehicle_report = report
+                st.session_state.chat_history.append({"role": "assistant", "text": report})
 
-    if user_input:
-        chat_model = genai.GenerativeModel("gemini-pro")
-        chat = chat_model.start_chat(history=[
-            {"role": "user", "parts": st.session_state.vehicle_report}
-        ])
+        # Chatbot section
+        if "vehicle_report" in st.session_state:
+            user_input = st.sidebar.text_input("💬 Your question to the buyer bot:")
 
-        reply = chat.send_message(user_input)
-        answer = reply.text
+            if user_input:
+                chat_model = genai.GenerativeModel("gemini-pro")
+                chat = chat_model.start_chat(history=[
+                    {"role": "user", "parts": st.session_state.vehicle_report}
+                ])
+                reply = chat.send_message(user_input)
+                answer = reply.text
 
-        st.sidebar.markdown("**🤖 Bot says:**")
-        st.sidebar.markdown(answer)
+                st.sidebar.markdown("**🤖 Bot says:**")
+                st.sidebar.markdown(answer)
 
-        # Update chat history
-        st.session_state.chat_history.append({"role": "user", "text": user_input})
-        st.session_state.chat_history.append({"role": "assistant", "text": answer})
+                st.session_state.chat_history.append({"role": "user", "text": user_input})
+                st.session_state.chat_history.append({"role": "assistant", "text": answer})
 
-    # Show conversation history
-    st.sidebar.markdown("---")
-    for msg in st.session_state.chat_history[::-1]:
-        role = "🧍‍♂️ You" if msg["role"] == "user" else "🤖 Bot"
-        st.sidebar.markdown(f"**{role}:** {msg['text']}")
+            st.sidebar.markdown("---")
+            for msg in st.session_state.chat_history[::-1]:
+                role = "🧍‍♂️ You" if msg["role"] == "user" else "🤖 Bot"
+                st.sidebar.markdown(f"**{role}:** {msg['text']}")
 
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+else:
+    st.warning("⚠️ Please enter your Google API key to start analysis.")
